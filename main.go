@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	simpchinese "golang.org/x/text/encoding/simplifiedchinese"
@@ -12,12 +14,24 @@ import (
 	"main.go/common"
 )
 
+type DomainInfo struct {
+	IP string `json:"data"`
+}
+
+type DoHResult struct {
+	Answer []DomainInfo `json:"Answer"`
+}
+
+var InputString string
+var PermissionCheck = true
+
 func main() {
 	common.Logger(0, "欢迎使用在线OCR访问修复工具，本工具将引导您修复大部分在线OCR无法访问、速度慢的问题。")
 	common.Logger(0, "在开始修复前，请先关闭您的计算机上正在运行的杀毒软件以保证修复工作正常进行。")
-
 	SystemTime := time.Now()
 	common.Logger(0, "当前系统时间戳: "+fmt.Sprint(SystemTime.Unix()))
+	common.Logger(0, "按任意键继续...")
+	fmt.Scanln()
 
 	common.Logger(0, "正在解析本地环境信息...")
 
@@ -47,6 +61,29 @@ func main() {
 		common.Logger(0, "您当前位于: "+string(b))
 	}
 
+	common.Logger(0, "正在向云端请求最佳服务器地址...")
+	Response, err = common.HttpGet("https://dns.alidns.com/resolve?name=best.access.c4a15wh.cn")
+	if err != nil {
+		common.Logger(2, "致命错误！无法获取最佳服务器地址！")
+		common.Logger(2, err.Error())
+		common.Logger(2, "按任意键退出")
+		fmt.Scanln()
+		return
+	}
+
+	var ResponseJson DoHResult
+	err = json.Unmarshal(Response, &ResponseJson)
+	if err != nil {
+		common.Logger(2, "致命错误！无法获取最佳服务器地址！")
+		common.Logger(2, err.Error())
+		common.Logger(2, "按任意键退出")
+		fmt.Scanln()
+		return
+	}
+
+	BestNodeIP := ResponseJson.Answer[0].IP
+	common.Logger(0, "最佳服务器地址："+BestNodeIP)
+
 	common.Logger(0, "正在修改Hosts...")
 	SystemEnv := os.Getenv("windir")
 	if len(SystemEnv) <= 2 {
@@ -55,25 +92,41 @@ func main() {
 	}
 	common.Logger(0, "Windows Dir: "+os.Getenv("windir"))
 
-	HostsFile, err := ioutil.ReadFile(SystemEnv + "\\System32\\drivers\\etc\\hosts")
+	_, err = os.Stat(SystemEnv + "\\System32\\drivers\\etc\\hosts")
 	if err != nil {
+		PermissionCheck = false
+	}
+
+	HostsFile, err := ioutil.ReadFile(SystemEnv + "\\System32\\drivers\\etc\\hosts")
+	if err != nil && PermissionCheck {
 		StageStatus[2] = false
 		common.Logger(2, "无法读取Hosts文件，请以管理员权限运行本程序并关闭杀毒软件。")
 		common.Logger(2, err.Error())
-		common.Logger(2, "修复失败!")
-		time.Sleep(200000)
+		common.Logger(2, "修复失败!\n按任意键退出。")
+		fmt.Scanln()
 		return
 	}
 
 	HostsString := string(HostsFile)
-	HostsString += "\n59.56.100.180  access.c4a15wh.cn"
+
+	IsFixerFixed := strings.Contains(HostsString, "access.c4a15wh.cn")
+
+	if !PermissionCheck {
+		IsFixerFixed = true
+	}
+
+	if IsFixerFixed {
+		HostsString = BestNodeIP + "  access.c4a15wh.cn"
+	} else {
+		HostsString += "\n" + BestNodeIP + "  access.c4a15wh.cn"
+	}
 
 	err = ioutil.WriteFile(SystemEnv+"\\System32\\drivers\\etc\\hosts", []byte(HostsString), 0777)
 	if err != nil {
 		common.Logger(2, "无法写入Hosts文件，请以管理员权限运行本程序并关闭杀毒软件。")
 		common.Logger(2, err.Error())
-		common.Logger(2, "修复失败!")
-		time.Sleep(200000)
+		common.Logger(2, "修复失败!/n按任意键退出。")
+		fmt.Scanln()
 		return
 	}
 
@@ -82,7 +135,6 @@ func main() {
 	exec.Command("ipconfig", "/flushdns")
 	common.Logger(0, "刷新完成! ")
 	exec.Command("ping", "access.c4a15wh.cn")
-	common.Logger(0, "修复完成，后续如有问题请联系QQ: 3039504176或胖次团子!")
-	time.Sleep(200000)
-	return
+	common.Logger(0, "修复完成，后续如有问题请联系QQ: 3039504176或胖次团子!\n按任意键退出")
+	fmt.Scanln()
 }
