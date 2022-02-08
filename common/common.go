@@ -1,33 +1,31 @@
 package common
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/fatih/color"
 )
 
 var FullLog string
 
 func Logger(LogType int, log string) {
-	var Header string
-
 	FullLog = FullLog + "\n" + log
 
 	switch LogType {
 	case 0: // INFO
-		Header = "[INFO] "
+		color.White("[INFO] " + " " + log)
 
 	case 1:
-		Header = "[WARN]"
+		color.Yellow("[WARN] " + " " + log)
 
 	case 2:
-		Header = "[ERROR]"
+		color.Red("[ERROR] " + log)
 
 	default:
-		Header = "[DEFAULT]"
+		color.White("[DEFAULT] " + " " + log)
 	}
 
-	fmt.Println(Header + " " + log)
 	ioutil.WriteFile("./fix.log", []byte(FullLog), 0777)
 }
 
